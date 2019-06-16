@@ -8,26 +8,31 @@ from sklearn.metrics.pairwise import cosine_similarity
 from ast import literal_eval
 # Import Numpy 
 import numpy as np
+# Import JSON
+import json
 
 # Function that takes in movie title as input and outputs most similar movies
 def get_recommendations(title, cosine_sim, indices, metadata):
-    # Get the index of the movie that matches the title
-    idx = indices[title]
+    try:
+        # Get the index of the movie that matches the title
+        idx = indices[title]
 
-    # Get the pairwsie similarity scores of all movies with that movie
-    sim_scores = list(enumerate(cosine_sim[idx]))
+        # Get the pairwsie similarity scores of all movies with that movie
+        sim_scores = list(enumerate(cosine_sim[idx]))
 
-    # Sort the movies based on the similarity scores
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        # Sort the movies based on the similarity scores
+        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
 
-    # Get the scores of the 10 most similar movies
-    sim_scores = sim_scores[1:11]
+        # Get the scores of the 10 most similar movies
+        sim_scores = sim_scores[1:6]
 
-    # Get the movie indices
-    movie_indices = [i[0] for i in sim_scores]
+        # Get the movie indices
+        movie_indices = [i[0] for i in sim_scores]
 
-    # Return the top 10 most similar movies
-    return metadata['title'].iloc[movie_indices]
+        # Return the top 5 most similar movies
+        return metadata['title'].iloc[movie_indices].tolist()
+    except:
+        return []
 
 # Get the director's name from the crew feature. If director is not listed, return NaN
 def get_director(x):
@@ -61,6 +66,26 @@ def clean_data(x):
 
 def create_soup(x):
     return ' '.join(x['keywords']) + ' ' + ' '.join(x['cast']) + ' ' + x['director'] + ' ' + ' '.join(x['genres'])
+
+def load_ratings(path):
+    with open(path) as json_file:  
+            ratings = json.load(json_file)
+            return ratings
+
+def create_folds(ratings):
+    ratings_folds = list()
+    for r in ratings:
+        rating_folds = list()
+        for i in range(10):
+            rating_folds.append(list())
+        ctrl = 0        
+        while ctrl < len(r):
+            rating_folds[ctrl%10].append(r[ctrl])
+            ctrl = ctrl + 1        
+        ratings_folds.append(rating_folds)
+    return ratings_folds
+
+
 
 def main():
     # Load Movies Metadata
@@ -106,7 +131,7 @@ def main():
 
 
     # Calculate the minimum number of votes required to be in the chart, m
-    m = metadata['vote_count'].quantile(0.40)
+    m = metadata['vote_count'].quantile(0.3)
 
     # Get the movies that have the minimum number of votes required
     q_movies = metadata.copy().loc[metadata['vote_count'] >= m]
@@ -122,10 +147,40 @@ def main():
 
     # Construct a reverse map of indices and movie titles
     indices = pd.Series(q_movies.index, index=q_movies['title']).drop_duplicates()
-    
-    print(get_recommendations('The Dark Knight Rises', cosine_sim=cosine_sim, indices=indices, metadata=q_movies))
-    print(get_recommendations('The Godfather', cosine_sim=cosine_sim, indices=indices, metadata=q_movies))
-    print(get_recommendations(''))
+
+    ratings = load_ratings(path='movies/merged_ratings.json')
+    ratings = create_folds(ratings)
+
+    evaluations = list()
+
+    # For each user
+    for r in ratings:
+        evaluation = {
+            'userId': r[0][0]['userId']
+        }
+        # For each test to be done
+        for test in range(10):
+            train = list()
+
+            # For each fold
+            for i in range(10):
+                # If fold isnt test
+                if i != test:
+                    # For each movie in fold
+                    for m in r[i]:
+                        train.append(m["movie_title"])
+
+            recomendations = list()
+            for t in train:
+                recomendations = recomendations  + get_recommendations(t, cosine_sim=cosine_sim, indices=indices, metadata=q_movies)
+            print("user", r[0][0]['userId'], "fold", test+1)
+            evaluation[str(test+1)] = len(set([d['movie_title'] for d in r[test]]).intersection(set(recomendations)))/len(r[test])
+        evaluations.append(evaluation)
+        #if(r[0][0]['userId'] == '5'):
+        #    break
+    with open('movies/evaluation.json', 'w') as outfile:  
+            json.dump(evaluations, outfile)
+    # print(get_recommendations('10 Things I Hate About You', cosine_sim=cosine_sim, indices=indices, metadata=q_movies))
 
 if __name__ == '__main__':
     main()
