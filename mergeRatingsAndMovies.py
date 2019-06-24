@@ -16,8 +16,6 @@ with open('movies/movies_metadata.json') as json_file:
                 r['movie_title'] =  movielist[0]['title']
                 merged_ratings.append(r)
             print('')
-            # if(i == 200):
-            #     break
 
         for k,v in groupby(merged_ratings,key=lambda x:x['userId']):
             userlist = list(v)

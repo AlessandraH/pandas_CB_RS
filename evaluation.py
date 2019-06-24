@@ -28,8 +28,6 @@ with open('movies/evaluation.json') as json_file:
             f9 = f9 + evaluation['9']
             f10 = f10 + evaluation['10']
             counter = counter + 1
-            # if(evaluation['userId'] == '3'):
-            #     break
 
     print('Counter = ', counter)
     
